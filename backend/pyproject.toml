@@ -1,0 +1,35 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"
+# Session-scoped loops: Phase 1 introduces a shared asyncpg engine. Tests and
+# fixtures must live on the SAME event loop, otherwise asyncpg connections
+# created in a fixture fail with "Future attached to a different loop" when
+# used inside function-scoped tests.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+warn_unused_configs = true
+strict = true
+exclude = ["alembic/"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/models/*"]
+# SQLAlchemy async runs coroutines inside greenlets; coverage must be told to
+# track that concurrency model or every line after an `await` is falsely
+# reported as uncovered. "thread" covers httpx/ASGI test transport internals.
+concurrency = ["greenlet", "thread"]
+
+[tool.coverage.report]
+fail_under = 80

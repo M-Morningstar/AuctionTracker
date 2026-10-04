@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Node / frontend (used from Phase 5)
+node_modules/
+frontend/dist/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Docker data volume
+pgdata/

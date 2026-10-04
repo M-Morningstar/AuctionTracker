@@ -1,0 +1,17 @@
+# AuctionTracker
+
+Automated pipeline that scrapes Calgary HiBid auctions, normalizes titles, values items against
+multiple secondary markets, and delivers a daily high-ROI hotlist via Discord + a local dashboard.
+
+## Stack
+FastAPI (Python 3.12) · PostgreSQL 16 · SQLAlchemy 2.0 async · Alembic · Crawl4AI · Local Ollama ·
+Vite + React + TS dashboard.
+
+## Status
+Sprint 0 — foundation in progress. See `docs/implementation.md`.
+
+## Quick start (dev)
+1. `cp .env.example .env`
+2. `docker compose up -d postgres`
+3. `cd backend && uv sync && alembic upgrade head`
+4. `uvicorn app.main:app --reload`

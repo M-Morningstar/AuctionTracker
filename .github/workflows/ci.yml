@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  # Order matters (AIConstitution FLOW 2B): security FIRST, coverage LAST.
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          cd backend
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: pip-audit (dependency vulnerability scan)
+        run: |
+          cd backend
+          pip-audit -r requirements.txt
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: cd backend && ruff check app tests
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: cd backend && pip install -r requirements.txt -r requirements-dev.txt
+      - run: cd backend && mypy app
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: cd backend && pip install -r requirements.txt -r requirements-dev.txt
+      - run: cd backend && pytest
+
+  coverage:
+    needs: [security, lint, typecheck, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: cd backend && pip install -r requirements.txt -r requirements-dev.txt
+      - run: cd backend && pytest --cov=app --cov-report=term-missing --cov-fail-under=80
