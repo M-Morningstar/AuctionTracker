@@ -29,3 +29,7 @@ pgdata/
 
 # Local-only docs (kept out of the repo)
 docs/
+
+# Local-only project brief & agent preferences
+project_brief_*.md
+.commandcode/
