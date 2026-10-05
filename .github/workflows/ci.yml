@@ -45,21 +45,53 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: auction
+          POSTGRES_PASSWORD: auction
+          POSTGRES_DB: auction
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Create test database
+        run: PGPASSWORD=auction psql -h localhost -p 5433 -U auction -d auction -c 'CREATE DATABASE auction_test;'
       - run: cd backend && pip install -r requirements.txt -r requirements-dev.txt
       - run: cd backend && pytest
 
   coverage:
     needs: [security, lint, typecheck, test]
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: auction
+          POSTGRES_PASSWORD: auction
+          POSTGRES_DB: auction
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Create test database
+        run: PGPASSWORD=auction psql -h localhost -p 5433 -U auction -d auction -c 'CREATE DATABASE auction_test;'
       - run: cd backend && pip install -r requirements.txt -r requirements-dev.txt
       - run: cd backend && pytest --cov=app --cov-report=term-missing --cov-fail-under=80
