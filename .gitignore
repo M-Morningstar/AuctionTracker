@@ -30,6 +30,9 @@ pgdata/
 # Local-only docs (kept out of the repo)
 docs/
 
+# Browser-saved page assets (large, not used by tests)
+backend/tests/fixtures/*_files/
+
 # Local-only project brief & agent preferences
 project_brief_*.md
 .commandcode/

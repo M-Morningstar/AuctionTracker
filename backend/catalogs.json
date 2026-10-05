@@ -1,0 +1,26 @@
+{
+  "regions": {
+    "london-on":  { "name": "London, Ontario",  "tax_label": "HST", "tax_rate": "0.13" },
+    "calgary-ab": { "name": "Calgary, Alberta", "tax_label": "GST", "tax_rate": "0.05" }
+  },
+  "catalogs": [
+    {
+      "source_id": "encore-auctions-inc",
+      "name": "Encore Auctions Inc",
+      "region": "london-on",
+      "company_url": "https://hibid.com/company/92115/encore-auctions-inc",
+      "buyer_premium_pct": "0.16",
+      "per_item_fee": "1.50",
+      "cc_processing_pct": "0.024"
+    },
+    {
+      "source_id": "globe-auctions",
+      "name": "Globe Auctions",
+      "region": "calgary-ab",
+      "company_url": "https://hibid.com/company/92200/globe-auctions",
+      "buyer_premium_pct": "0.15",
+      "per_item_fee": "1.00",
+      "cc_processing_pct": null
+    }
+  ]
+}

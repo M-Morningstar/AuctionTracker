@@ -7,3 +7,6 @@ alembic==1.14.1
 pydantic==2.10.5
 pydantic-settings==2.7.1
 httpx==0.28.1
+beautifulsoup4==4.15.0
+crawl4ai==0.9.4
+soupsieve==2.10

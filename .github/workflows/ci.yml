@@ -20,7 +20,8 @@ jobs:
       - name: pip-audit (dependency vulnerability scan)
         run: |
           cd backend
-          pip-audit -r requirements.txt
+          # GHSA-8mgp-746c-j5xp (nltk via Crawl4AI) is unreachable + unpatched — see ADR-002 / known_issues.md.
+          pip-audit -r requirements.txt --ignore-vuln GHSA-8mgp-746c-j5xp
 
   lint:
     runs-on: ubuntu-latest
