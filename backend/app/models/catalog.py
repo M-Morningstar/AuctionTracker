@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base
@@ -38,9 +38,16 @@ class Item(Base):
     )
     item_id: Mapped[str] = mapped_column(String(255))
     raw_title: Mapped[str] = mapped_column(String(1000))
+    normalized_title: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    condition: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    normalized_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    normalization_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="pending", default="pending"
+    )
     current_bid: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     end_date: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     scraped_at: Mapped[datetime] = mapped_column(
         DateTime(), server_default=func.now(), onupdate=func.now()
     )

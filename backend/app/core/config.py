@@ -16,6 +16,8 @@ class Settings(BaseSettings):
 
     app_name: str = "AuctionTracker"
     database_url: str = "postgresql+asyncpg://auction:auction@localhost:5433/auction"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen2.5:7b"
 
 
 settings = Settings()

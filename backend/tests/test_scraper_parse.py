@@ -1,9 +1,13 @@
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 
 from app.services.scraper import (
+    ParsedItem,
+    is_notice_lot,
     parse_catalog,
     parse_datetime,
+    parse_lot_description,
     parse_price,
     parse_remaining_time,
 )
@@ -80,6 +84,42 @@ FALLBACK_HTML = """
 </div>
 """
 
+LOT_DETAIL_HTML = """
+<div id="panel-auction-detail-lot-information">
+  <table>
+    <tr>
+      <th>Description</th>
+      <td>
+        <div class="text-pre-line">
+          Dewalt 20V Max cordless drill. Includes charger, two batteries, and a hard case.
+        </div>
+      </td>
+    </tr>
+  </table>
+</div>
+"""
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _load_fixture(name: str) -> str:
+    return (FIXTURES / name).read_text()
+
+
+def test_parse_lot_description() -> None:
+    description = parse_lot_description(LOT_DETAIL_HTML)
+    assert description is not None
+    assert "Dewalt 20V Max cordless drill" in description
+
+
+def test_parse_lot_description_ignores_other_text_pre_line_blocks() -> None:
+    description = parse_lot_description(_load_fixture("lot_detail.html"))
+    assert description is not None
+    assert "MODEL: LS49CG932SNXZA" in description
+    assert "FRIDAY BID CLOSING" not in description
+    assert "ALL ITEMS MUST BE PAID" not in description
+    assert "Agreement and Terms of Service" not in description
+    assert "If shipping is required" not in description
 
 def test_parse_price() -> None:
     assert parse_price("$25.00") == Decimal("25.00")
@@ -109,6 +149,7 @@ def test_parse_catalog_extracts_lot_fields() -> None:
     assert item.current_bid == Decimal("25.00")
     assert item.end_date == datetime(2026, 10, 6, 17, 30, 0)
     assert item.image_url == "https://example.com/img.jpg"
+    assert item.detail_url == "https://hibid.com/lot/323691101/nib-dewalt-20v-drill?ref=catalog"
 
 
 def test_parse_catalog_skips_unhydrated_skeleton_tiles() -> None:
@@ -121,3 +162,29 @@ def test_parse_catalog_gives_suffixed_lots_distinct_ids() -> None:
 
 def test_parse_catalog_falls_back_to_lot_number_text_without_link() -> None:
     assert [item.item_id for item in parse_catalog(FALLBACK_HTML)] == ["123"]
+
+
+def _parsed(description: str | None) -> ParsedItem:
+    return ParsedItem(
+        item_id="1",
+        title="16% BUYERS PREMIUM HST + $1.50 HANDLING FEE",
+        current_bid=Decimal("0.00"),
+        end_date=None,
+        image_url=None,
+        description=description,
+    )
+
+
+def test_is_notice_lot_detects_do_not_bid_description() -> None:
+    assert is_notice_lot(_parsed("DO NOT BID")) is True
+
+
+def test_is_notice_lot_is_case_and_whitespace_insensitive() -> None:
+    assert is_notice_lot(_parsed("  do not bid ")) is True
+    assert is_notice_lot(_parsed("Do Not Bid")) is True
+
+
+def test_is_notice_lot_rejects_real_lots_and_missing_descriptions() -> None:
+    assert is_notice_lot(_parsed(None)) is False
+    assert is_notice_lot(_parsed("")) is False
+    assert is_notice_lot(_parsed("Dewalt 20V Max cordless drill with two batteries")) is False

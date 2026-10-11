@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from app.core.catalog import Catalog, Region
 from app.db import async_session_factory
-from app.models.catalog import Auction
+from app.models.catalog import Auction, Item
 from app.services.ingest import upsert_auction, upsert_items
 from app.services.scraper import CatalogRef, ParsedItem
 
@@ -74,3 +74,27 @@ async def test_upsert_items_dedupes_on_rerun() -> None:
 
     inserted, updated = await upsert_items(auction_id, items)
     assert (inserted, updated) == (0, 1)
+
+
+async def test_upsert_items_persists_and_merges_description() -> None:
+    cfg = _catalog("src-3", "london-on")
+    ref = CatalogRef(catalog_id="780010", url="https://hibid.com/catalog/780010/t", name="Catalog C")
+    auction_id = await upsert_auction(cfg, ref)
+
+    with_desc = [ParsedItem(item_id="1", title="Drill", current_bid=None, end_date=None,
+                            image_url=None, description="Charger included.")]
+    await upsert_items(auction_id, with_desc)
+
+    # Re-scrape where the detail-page fetch failed (description None) must NOT erase it.
+    no_desc = [ParsedItem(item_id="1", title="Drill", current_bid=None, end_date=None,
+                          image_url=None, description=None)]
+    await upsert_items(auction_id, no_desc)
+
+    async with async_session_factory() as session:
+        # item_id is unique only *within* an auction, and the test DB is shared
+        # across the whole session — so scope the lookup to this auction.
+        result = await session.execute(
+            select(Item).where(Item.auction_id == auction_id, Item.item_id == "1")
+        )
+        item = result.scalar_one()
+        assert item.description == "Charger included."

@@ -5,9 +5,13 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from typing import TYPE_CHECKING
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, Tag
+
+if TYPE_CHECKING:
+    from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig  # type: ignore[import-untyped]
 
 # ---------------------------------------------------------------------------
 # HiBid DOM selectors — discovered against live pages and saved fixtures.
@@ -28,6 +32,12 @@ BID_SELECTOR = "span.lot-high-bid"
 # Remaining time countdown, rendered like "2d 5h 30m".
 TIME_SELECTOR = "div.lot-time-left"
 IMAGE_SELECTOR = "img.lot-thumbnail.img-fluid"
+# Lot detail page (per-lot description). The page renders several
+# `.text-pre-line` blocks (auction date/time, auction description, payment terms,
+# terms & conditions, shipping), so anchor on the lot information panel's
+# Description row instead of the first `.text-pre-line` in the document.
+LOT_INFORMATION_PANEL_SELECTOR = "#panel-auction-detail-lot-information"
+DESCRIPTION_SELECTOR = f"{LOT_INFORMATION_PANEL_SELECTOR} div.text-pre-line"
 
 # Company page (catalog discovery).
 COMPANY_CARD_SELECTOR = "div.card"
@@ -58,6 +68,8 @@ class ParsedItem:
     current_bid: Decimal | None
     end_date: datetime | None
     image_url: str | None
+    detail_url: str | None = None
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +77,17 @@ class CatalogRef:
     catalog_id: str
     url: str
     name: str
+
+
+# Auctioneer "notice" lots (payment terms, pickup instructions, surcharges, etc.)
+# are published as real lots but carry the literal description "DO NOT BID". They
+# are not products and must never be ingested or normalized.
+NOTICE_DESCRIPTION = "do not bid"
+
+
+def is_notice_lot(item: ParsedItem) -> bool:
+    """Return True for auctioneer notice/placeholder lots (description 'DO NOT BID')."""
+    return (item.description or "").strip().casefold() == NOTICE_DESCRIPTION
 
 
 def parse_price(text: str | None) -> Decimal | None:
@@ -150,6 +173,12 @@ def _extract_item_id(node: Tag) -> str:
             return match.group(1)
     return _extract_lot_number(_text(node.select_one(ITEM_ID_SELECTOR)))
 
+def _extract_detail_url(node: Tag) -> str | None:
+    """Return the absolute lot detail URL, or None when the title has no link."""
+    href = _attr(node.select_one(LOT_LINK_SELECTOR), "href")
+    if not href:
+        return None
+    return urljoin(HIBID_BASE_URL, href)
 
 def parse_catalog(html: str, now: datetime | None = None) -> list[ParsedItem]:
     soup = BeautifulSoup(html, "html.parser")
@@ -180,10 +209,32 @@ def parse_catalog(html: str, now: datetime | None = None) -> list[ParsedItem]:
                 current_bid=parse_price(_text(node.select_one(BID_SELECTOR))),
                 end_date=end_date,
                 image_url=image_url,
+                detail_url=_extract_detail_url(node),
             )
         )
     return items
 
+def _find_lot_description_node(soup: BeautifulSoup) -> Tag | None:
+    """Return the lot-level Description cell, ignoring the auction-level one."""
+    panel = soup.select_one(LOT_INFORMATION_PANEL_SELECTOR)
+    if panel is None:
+        return None
+    for th in panel.select("th"):
+        if th.get_text(strip=True) == "Description":
+            row = th.find_parent("tr")
+            if row is not None:
+                node = row.select_one("div.text-pre-line")
+                if node is not None:
+                    return node
+    return None
+
+
+def parse_lot_description(html: str) -> str | None:
+    """Extract the per-lot description text from a lot detail page."""
+    soup = BeautifulSoup(html, "html.parser")
+    node = soup.select_one(DESCRIPTION_SELECTOR) or _find_lot_description_node(soup)
+    text = _text(node)
+    return text.strip() if text else None
 
 def parse_catalog_links(html: str) -> list[CatalogRef]:
     """Extract catalog references from a HiBid company page.
@@ -221,30 +272,51 @@ def parse_catalog_links(html: str) -> list[CatalogRef]:
 
 
 class HiBidScraper:
-    async def fetch_html(self, url: str) -> str:
-        from crawl4ai import (  # type: ignore[import-untyped]
-            AsyncWebCrawler,
-            BrowserConfig,
-            CacheMode,
-            CrawlerRunConfig,
-        )
+    """A Crawl4AI crawler that opens one browser and reuses it across fetches.
 
-        browser = BrowserConfig(
+    Use as an async context manager so the browser is opened once and closed once.
+    Opening a fresh browser per page was fine for ~4 catalogs, but it is the single
+    biggest slowdown once we add ~300 lot-detail fetches.
+    """
+
+    _browser: BrowserConfig
+    _run: CrawlerRunConfig
+    _crawler: AsyncWebCrawler | None
+
+    def __init__(self) -> None:
+        from crawl4ai import BrowserConfig, CacheMode, CrawlerRunConfig
+
+        self._browser = BrowserConfig(
             headless=True,
             user_agent=USER_AGENT,
             extra_args=["--disable-blink-features=AutomationControlled"],
         )
-        # HiBid is an Angular SPA: lot/card markup is rendered only after the app
-        # fetches its data. Waiting for network idle captures the hydrated DOM;
-        # unlike waiting on a lot selector it also returns pages that legitimately
-        # have no lots (e.g. an ended catalog) instead of timing out.
-        run = CrawlerRunConfig(
+        self._run = CrawlerRunConfig(
             cache_mode=CacheMode.BYPASS,
             wait_until="networkidle",
             page_timeout=60000,
         )
-        async with AsyncWebCrawler(config=browser) as crawler:
-            result = await crawler.arun(url=url, config=run)
-            if not result.success:
-                raise RuntimeError(f"HiBid scrape failed for {url}: {result.error_message}")
-            return str(result.html)
+        self._crawler = None
+
+    async def __aenter__(self) -> HiBidScraper:
+        from crawl4ai import AsyncWebCrawler
+
+        self._crawler = AsyncWebCrawler(config=self._browser)
+        await self._crawler.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
+        assert self._crawler is not None
+        await self._crawler.__aexit__(exc_type, exc, tb)
+
+    async def fetch_html(self, url: str) -> str:
+        if self._crawler is None:
+            raise RuntimeError("HiBidScraper must be used as an async context manager")
+        result = await self._crawler.arun(url=url, config=self._run)
+        if not result.success:
+            raise RuntimeError(f"HiBid scrape failed for {url}: {result.error_message}")
+        return str(result.html)
+
+    async def fetch_description(self, detail_url: str) -> str | None:
+        html = await self.fetch_html(detail_url)
+        return parse_lot_description(html)

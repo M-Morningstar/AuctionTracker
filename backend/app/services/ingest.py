@@ -65,6 +65,7 @@ async def upsert_items(auction_id: int, parsed_items: list[ParsedItem]) -> tuple
                         current_bid=parsed.current_bid,
                         end_date=parsed.end_date,
                         image_url=parsed.image_url,
+                        description=parsed.description,
                     )
                 )
                 inserted += 1
@@ -73,6 +74,8 @@ async def upsert_items(auction_id: int, parsed_items: list[ParsedItem]) -> tuple
                 item.current_bid = parsed.current_bid
                 item.end_date = parsed.end_date
                 item.image_url = parsed.image_url
+                if parsed.description is not None:
+                    item.description = parsed.description
                 updated += 1
         await session.commit()
     return inserted, updated
