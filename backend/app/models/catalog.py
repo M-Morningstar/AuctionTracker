@@ -53,3 +53,26 @@ class Item(Base):
     )
 
     auction: Mapped[Auction] = relationship(back_populates="items")
+    market_comps: Mapped[list[MarketComp]] = relationship(back_populates="item")
+
+
+class MarketComp(Base):
+    __tablename__ = "market_comps"
+    __table_args__ = (
+        UniqueConstraint("item_id", "source", "url", name="uq_market_comps_item_source_url"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("items.id", ondelete="CASCADE"), index=True
+    )
+    source: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(1000))
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(String(8))
+    url: Mapped[str] = mapped_column(String(1000))
+    condition: Mapped[str] = mapped_column(String(32))
+    resolved_value: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())
+
+    item: Mapped[Item] = relationship(back_populates="market_comps")

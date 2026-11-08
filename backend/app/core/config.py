@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://auction:auction@localhost:5433/auction"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
+    ebay_client_id: str = ""
+    ebay_client_secret: str = ""
+    ebay_marketplace_id: str = "EBAY_CA"
+    valuation_cache_ttl_seconds: int = 86400
 
 
 settings = Settings()
